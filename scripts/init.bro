@@ -42,6 +42,12 @@ export {
         ## Destination kafka topic name
         const topic_name: string = "bro" &redef;
 
+        ## Format string for key. Example: 'test-%1-%2' where %1 and %2 replaced with of columns from log. Empty means no key.
+        const key_fmt: string = "" &redef;
+
+        ## Comma separated list of column name that will be used to make key according to "key_fmt"
+        const key_fmt_fields: string = "" &redef;
+
         ## Maximum wait on shutdown in milliseconds
         const max_wait_on_shutdown: count = 3000 &redef;
 

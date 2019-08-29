@@ -265,6 +265,20 @@ event bro_init() &priority=-10
 
 _Note_:  Because `Kafka::tag_json` is set to True in this example, the value of `$path` is used as the tag for each `Log::Filter`. If you were to add a log filter with the same `$path` as an existing filter, Bro will append "-N", where N is an integer starting at 2, to the end of the log path so that each filter has its own unique log path. For instance, the second instance of `conn` would become `conn-2`.
 
+### Example 7 - Set key for kafka records
+
+Goal is to have keys for messages in kafka in some format.
+```
+@load packages/metron-bro-plugin-kafka/Apache/Kafka
+redef Kafka::logs_to_send = set(HTTP::LOG, DNS::LOG);
+redef Kafka::key_fmt = "%1-%2";
+redef Kafka::key_fmt_fields = "uid,ts";
+redef Kafka::kafka_conf = table(
+    ["metadata.broker.list"] = "server1.example.com:9092,server2.example.com:9092"
+);
+```
+
+
 ## Settings
 
 ### `logs_to_send`

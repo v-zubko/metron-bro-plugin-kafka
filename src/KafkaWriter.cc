@@ -16,6 +16,62 @@
  */
 
 #include "KafkaWriter.h"
+#include <sstream>
+#include <memory>
+#include <iostream>
+#include <string>
+#include <cstdio>
+#include <threading/SerialTypes.h>
+
+std::string vtformat(const std::string &fmt, const std::vector<std::string> &strs)
+{
+    static const char FORMAT_SYMBOL = '%';
+    std::string res;
+    std::string buf;
+    bool arg = false;
+    for (int i = 0; i <= static_cast<int>(fmt.size()); ++i)
+    {
+        bool last = i == static_cast<int>(fmt.size());
+        char ch = fmt[i];
+        if (arg)
+        {
+            if (ch >= '0' && ch <= '9')
+            {
+                buf += ch;
+            }
+            else
+            {
+                int num = 0;
+                if (!buf.empty() && buf.length() < 10)
+                    num = atoi(buf.c_str());
+                if (num >= 1 && num <= static_cast<int>(strs.size()))
+                    res += strs[num - 1];
+                else
+                    res += FORMAT_SYMBOL + buf;
+                buf.clear();
+                if (ch != FORMAT_SYMBOL)
+                {
+                    if (!last)
+                        res += ch;
+                    arg = false;
+                }
+            }
+        }
+        else
+        {
+            if (ch == FORMAT_SYMBOL)
+            {
+                arg = true;
+            }
+            else
+            {
+                if (!last)
+                    res += ch;
+            }
+        }
+    }
+    return res;
+}
 
 using namespace logging;
 using namespace writer;
@@ -102,6 +158,17 @@ bool KafkaWriter::DoInit(const WriterInfo& info, int num_fields, const threading
     } else if(topic_name.empty()) {
       // If no global 'topic_name' is defined, use the log stream's 'path'
       topic_name = info.path;
+    }
+
+    key_fmt.assign((const char*)BifConst::Kafka::key_fmt->Bytes(), BifConst::Kafka::key_fmt->Len());//= GetConfigValue(info, "key_fmt");
+    MsgThread::Info(Fmt("key_fmt: %s", key_fmt.c_str()));
+
+    string fldVals;
+    fldVals.assign((const char*)BifConst::Kafka::key_fmt_fields->Bytes(), BifConst::Kafka::key_fmt_fields->Len());//GetConfigValue(info, "key_fmt_fields")
+    std::stringstream ss(fldVals);
+    std::string token;
+    while (std::getline(ss, token, ',')) {
+        field_names.push_back(token);
     }
 
     /**
@@ -240,11 +307,26 @@ bool KafkaWriter::DoWrite(int num_fields, const threading::Field* const* fields,
     // format the log entry
     formatter->Describe(&buff, num_fields, fields, vals);
 
+    string key;
+    string* pKey = nullptr;
+    if (key_fmt.length() != 0) {
+        vector<string> fldVals;
+        for (auto it = field_names.begin(); it != field_names.end(); it++) {
+            for (int i = 0; i < num_fields; ++i) {
+                if(strcmp(fields[i]->name, it->c_str()) == 0) {
+                    fldVals.push_back(string(vals[i]->val.string_val.data, vals[i]->val.string_val.length));
+                }
+            }
+        }
+        key = vtformat(key_fmt, fldVals);
+        pKey = &key;
+    }
+
     // send the formatted log entry to kafka
     const char* raw = (const char*)buff.Bytes();
     RdKafka::ErrorCode resp = producer->produce(
         topic, RdKafka::Topic::PARTITION_UA, RdKafka::Producer::RK_MSG_COPY,
-        const_cast<char*>(raw), strlen(raw), NULL, NULL);
+        const_cast<char*>(raw), strlen(raw), pKey, nullptr);
 
     if (RdKafka::ERR_NO_ERROR == resp) {
         producer->poll(0);

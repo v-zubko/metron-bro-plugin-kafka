@@ -73,6 +73,8 @@ private:
     map<string, string> kafka_conf;
     string topic_name;
     string topic_name_override;
+    string key_fmt;
+    vector<string> field_names;
     threading::formatter::Formatter *formatter;
     RdKafka::Producer* producer;
     RdKafka::Topic* topic;
